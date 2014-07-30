@@ -20,6 +20,7 @@
 package org.eclipse.californium.core;
 
 import java.net.URI;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -33,6 +34,7 @@ import org.eclipse.californium.core.coap.CoAP;
 import org.eclipse.californium.core.coap.CoAP.Code;
 import org.eclipse.californium.core.coap.CoAP.ResponseCode;
 import org.eclipse.californium.core.coap.CoAP.Type;
+import org.eclipse.californium.core.coap.OptionSet;
 import org.eclipse.californium.core.coap.Response;
 import org.eclipse.californium.core.network.Endpoint;
 import org.eclipse.californium.core.network.Exchange;
@@ -41,6 +43,8 @@ import org.eclipse.californium.core.observe.ObserveRelation;
 import org.eclipse.californium.core.observe.ObserveRelationContainer;
 import org.eclipse.californium.core.server.ServerMessageDeliverer;
 import org.eclipse.californium.core.server.resources.CoapExchange;
+import org.eclipse.californium.core.server.resources.ETagDefaultSupport;
+import org.eclipse.californium.core.server.resources.ETagSupport;
 import org.eclipse.californium.core.server.resources.Resource;
 import org.eclipse.californium.core.server.resources.ResourceAttributes;
 import org.eclipse.californium.core.server.resources.ResourceObserver;
@@ -159,6 +163,9 @@ public  class CoapResource implements Resource {
 	/* The notification orderer. */
 	private ObserveNotificationOrderer notificationOrderer;
 	
+	/* Support for ETags */
+	private ETagSupport etagSupport;
+	
 	/**
 	 * Constructs a new resource with the specified name.
 	 *
@@ -184,8 +191,8 @@ public  class CoapResource implements Resource {
 		this.observers = new CopyOnWriteArrayList<ResourceObserver>();
 		this.observeRelations = new ObserveRelationContainer();
 		this.notificationOrderer = new ObserveNotificationOrderer();
+		this.etagSupport = createETagSupport();
 	}
-	
 
 	/**
 	 * Handles any request in the given exchange. By default it responds
@@ -201,12 +208,41 @@ public  class CoapResource implements Resource {
 	@Override
 	public void handleRequest(final Exchange exchange) {
 		Code code = exchange.getRequest().getCode();
+		if (code == Code.GET && validateETag(exchange))
+			return;
+		
 		switch (code) {
 			case GET:	handleGET(new CoapExchange(exchange, this)); break;
 			case POST:	handlePOST(new CoapExchange(exchange, this)); break;
 			case PUT:	handlePUT(new CoapExchange(exchange, this)); break;
 			case DELETE: handleDELETE(new CoapExchange(exchange, this)); break;
 		}
+	}
+	
+	
+	/**
+	 * Compares the ETags of the request with the current ETag from the
+	 * {@link ETagSupport}. If an ETag matches, the method automatically
+	 * responds with a 2.03 (Valid) and returns true. If there is no ETag or if
+	 * there is not ETagSupport object, the method returns false.
+	 *
+	 * @param exchange the exchange
+	 * @return true, the request has a valid ETag, false otherwise
+	 */
+	public boolean validateETag(Exchange exchange) {
+		ETagSupport support = getETagSupport();
+		OptionSet options = exchange.getRequest().getOptions();
+		if (options.getETagCount() > 0 && support != null) {
+			byte[] current = support.getCurrentETag();
+			for (byte[] etag:options.getETags())
+				if (Arrays.equals(etag, current)) {
+					Response response = new Response(ResponseCode.VALID);
+					response.getOptions().addETag(current);
+					exchange.sendResponse(response);
+					return true;
+				}
+		}
+		return false;
 	}
 	
 	/**
@@ -717,6 +753,24 @@ public  class CoapResource implements Resource {
 		for (ObserveRelation relation:observeRelations) {
 			relation.notifyObservers();
 		}
+	}
+	
+	/**
+	 * Creates a new ETagSupport object.
+	 * 
+	 * @return an ETagSupport object
+	 */
+	protected ETagSupport createETagSupport() {
+		return new ETagDefaultSupport();
+	}
+	
+	/**
+	 * Gets the ETagSupport object or null if none is present.
+	 *
+	 * @return the ETagSupport object
+	 */
+	public ETagSupport getETagSupport() {
+		return etagSupport;
 	}
 
 	/* (non-Javadoc)
