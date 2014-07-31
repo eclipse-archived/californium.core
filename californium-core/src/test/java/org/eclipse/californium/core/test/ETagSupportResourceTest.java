@@ -49,6 +49,8 @@ public class ETagSupportResourceTest {
 		
 		// First GET request expects a 2.05 response with an ETag.
 		CoapClient client = new CoapClient("coap://localhost:"+serverPort+"/"+TARGET);
+		client.setTimeout(100);
+		
 		CoapResponse res1 = client.get();
 		Assert.assertNotNull(res1);
 		Assert.assertEquals(ResponseCode.CONTENT, res1.getCode());
