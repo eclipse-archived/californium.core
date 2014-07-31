@@ -42,6 +42,8 @@ import org.eclipse.californium.core.observe.ObserveNotificationOrderer;
 import org.eclipse.californium.core.observe.ObserveRelation;
 import org.eclipse.californium.core.observe.ObserveRelationContainer;
 import org.eclipse.californium.core.server.ServerMessageDeliverer;
+import org.eclipse.californium.core.server.resources.AcceptDefaultSupport;
+import org.eclipse.californium.core.server.resources.AcceptSupport;
 import org.eclipse.californium.core.server.resources.CoapExchange;
 import org.eclipse.californium.core.server.resources.ETagDefaultSupport;
 import org.eclipse.californium.core.server.resources.ETagSupport;
@@ -166,6 +168,9 @@ public  class CoapResource implements Resource {
 	/* Support for ETags */
 	private ETagSupport etagSupport;
 	
+	/* Support for Accept */
+	private AcceptSupport acceptSupport;
+	
 	/**
 	 * Constructs a new resource with the specified name.
 	 *
@@ -192,6 +197,7 @@ public  class CoapResource implements Resource {
 		this.observeRelations = new ObserveRelationContainer();
 		this.notificationOrderer = new ObserveNotificationOrderer();
 		this.etagSupport = createETagSupport();
+		this.acceptSupport = createAcceptSupport();
 	}
 
 	/**
@@ -208,7 +214,11 @@ public  class CoapResource implements Resource {
 	@Override
 	public void handleRequest(final Exchange exchange) {
 		Code code = exchange.getRequest().getCode();
+		
 		if (code == Code.GET && validateETag(exchange))
+			return;
+		
+		if (expectsUnacceptableFormat(exchange))
 			return;
 		
 		switch (code) {
@@ -219,7 +229,6 @@ public  class CoapResource implements Resource {
 		}
 	}
 	
-	
 	/**
 	 * Compares the ETags of the request with the current ETag from the
 	 * {@link ETagSupport}. If an ETag matches, the method automatically
@@ -227,7 +236,7 @@ public  class CoapResource implements Resource {
 	 * there is not ETagSupport object, the method returns false.
 	 *
 	 * @param exchange the exchange
-	 * @return true, the request has a valid ETag, false otherwise
+	 * @return true, if the request has a valid ETag, false otherwise
 	 */
 	public boolean validateETag(Exchange exchange) {
 		ETagSupport support = getETagSupport();
@@ -241,6 +250,32 @@ public  class CoapResource implements Resource {
 					exchange.sendResponse(response);
 					return true;
 				}
+		}
+		return false;
+	}
+	
+	/**
+	 * Compares the accept value of the request with the accept values of the
+	 * AcceptSupport object (ASO). If the request has no accept value, it is
+	 * considered to accept anything. If there is no ASO, the resource is
+	 * considered to accept any request (it still can send a Not-Acceptable
+	 * response). Only if the request has an accept value and the ASO does not
+	 * accept it, this method responds with a 4.06 (Not Acceptable) and returns
+	 * true. The {@link AcceptDefaultSupport} by default accepts everything.
+	 *
+	 * @param exchange the exchange
+	 * @return true, if the request does NOT accept the content format of this
+	 *         resource
+	 */
+	public boolean expectsUnacceptableFormat(Exchange exchange) {
+		AcceptSupport support = getAcceptSupport();
+		OptionSet options = exchange.getRequest().getOptions();
+		if (options.hasAccept() && support != null) {
+			if (! support.isAcceptable(options.getAccept())) {
+				Response response = new Response(ResponseCode.NOT_ACCEPTABLE);
+				exchange.sendResponse(response);
+				return true;
+			}
 		}
 		return false;
 	}
@@ -713,7 +748,7 @@ public  class CoapResource implements Resource {
 	}
 	
 	/**
-	 * Returns the number of observe realtions that this resource has to CoAP
+	 * Returns the number of observe relations that this resource has to CoAP
 	 * clients.
 	 * 
 	 * @return the observer count
@@ -765,12 +800,48 @@ public  class CoapResource implements Resource {
 	}
 	
 	/**
+	 * Creates a new AcceptSupport object.
+	 * 
+	 * @return an AcceptSupport object
+	 */
+	protected AcceptSupport createAcceptSupport() {
+		return new AcceptDefaultSupport();
+	}
+	
+	/**
 	 * Gets the ETagSupport object or null if none is present.
 	 *
 	 * @return the ETagSupport object
 	 */
 	public ETagSupport getETagSupport() {
 		return etagSupport;
+	}
+	
+	/**
+	 * Sets the ETag support object.
+	 *
+	 * @param support the new ETag support object
+	 */
+	public void setETagSupport(ETagSupport support) {
+		this.etagSupport = support;
+	}
+	
+	/**
+	 * Gets the AcceptSupport object or null if none is present.
+	 * 
+	 * @return the AcceptSupport object
+	 */
+	public AcceptSupport getAcceptSupport() {
+		return acceptSupport;
+	}
+	
+	/**
+	 * Sets the accept support object.
+	 *
+	 * @param support the new accept support obejct
+	 */
+	public void setAcceptSupport(AcceptSupport support) {
+		this.acceptSupport = support;
 	}
 
 	/* (non-Javadoc)
