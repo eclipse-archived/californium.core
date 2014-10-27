@@ -85,6 +85,12 @@
 						</Import-Package>
 						<Embed-Dependency>californium-core;inline=true,element-connector;inline=true</Embed-Dependency>
 						<Bundle-SymbolicName>californium-osgi</Bundle-SymbolicName>
+						
+						<!-- added for Activator -->
+						<Bundle-Activator>${groupId}.osgi.Activator</Bundle-Activator>
+						<Export-Service>org.osgi.service.cm.ManagedService</Export-Service>
+						<Import-Service>org.eclipse.californium.core.server.resources.Resource</Import-Service>
+						
 					</instructions>
 				</configuration>
 			</plugin>
