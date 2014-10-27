@@ -1,0 +1,69 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<project
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd"
+	xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+
+	<modelVersion>4.0.0</modelVersion>
+
+	<properties>
+		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+		<osgi.version>4.3.1</osgi.version>
+	</properties>
+
+	<parent>
+		<groupId>org.eclipse.californium</groupId>
+		<artifactId>root</artifactId>
+		<version>1.0.0-SNAPSHOT</version>
+	</parent>
+	<artifactId>cf-helloworld-OSGi</artifactId>
+	<packaging>bundle</packaging>
+
+	<name>Cf-HelloWorldOSGi</name>
+	<description>Californium (Cf) example for OSGi wrapper</description>
+
+	<dependencies>
+		<dependency>
+			<groupId>org.eclipse.californium</groupId>
+			<artifactId>californium-core</artifactId>
+			<version>${project.version}</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.osgi</groupId>
+			<artifactId>org.osgi.core</artifactId>
+			<version>${osgi.version}</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.osgi</groupId>
+			<artifactId>org.osgi.compendium</artifactId>
+			<version>${osgi.version}</version>
+			<scope>provided</scope>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.felix</groupId>
+				<artifactId>maven-bundle-plugin</artifactId>
+				<version>2.3.7</version>
+				<extensions>true</extensions>
+				<configuration>
+					<instructions>
+						<Bundle-Activator>${groupId}.examples.Activator</Bundle-Activator>
+						<Import-Package>
+							org.osgi.framework,
+							org.eclipse.californium.core, org.eclipse.californium.core.server.resources						
+						</Import-Package>
+						<Export-Package>
+						</Export-Package>
+						<Export-Service>org.eclipse.californium.core.server.resources.Resource</Export-Service>
+						<Bundle-SymbolicName>helloworld-osgi</Bundle-SymbolicName>
+					</instructions>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+
+</project>
