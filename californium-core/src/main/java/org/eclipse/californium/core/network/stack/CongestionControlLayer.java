@@ -22,6 +22,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.eclipse.californium.core.coap.CoAP.Type;
 import org.eclipse.californium.core.coap.EmptyMessage;
+import org.eclipse.californium.core.coap.Message;
 import org.eclipse.californium.core.coap.Request;
 import org.eclipse.californium.core.coap.Response;
 import org.eclipse.californium.core.network.Exchange;
@@ -100,66 +101,56 @@ public abstract class CongestionControlLayer extends ReliabilityLayer {
 //	}
 	
 	/*
-	 * Method called when receiving a Response/Request from the upper layers: 
-	 * 1.) Checks first whether a Response or Request is processed (to obtain the NON/CON Type)
-	 * 2.) Checks if message is a non-confirmable. If so, it is added to the non-confirmable queue and in case 
+	 * Method called when receiving a Response/Request from the upper layers:
+	 * 1.) Checks if message is a non-confirmable. If so, it is added to the non-confirmable queue and in case 
 	 * 	   the bucket thread is not running, it is started
-	 * 3.) Checks if message is confirmable and if the NSTART rule is followed. If more than NSTART exchanges are running, the Request is enqueued.
+	 * 2.) Checks if message is confirmable and if the NSTART rule is followed. If more than NSTART exchanges are running, the Request is enqueued.
 	 *     If the NSTART limit is respected, the message is passed on to the reliability layer.
 	 */
-	private boolean processMessage(Exchange exchange, Object message) {
-		Type messageType;
-		messageType = Type.NON;
-
-		// Determine type of message
-		if (message.getClass() == Request.class) {
-			messageType = exchange.getCurrentRequest().getType();
-		}
-		if (message.getClass() == Response.class) {
-			messageType = exchange.getCurrentResponse().getType();
-		}
-
+	private boolean processMessage(Exchange exchange, Message message) {
+		
+		//FIXME: Why was there this weird way through Request/Response.class?
+		Type messageType = message.getType();
+		
 		// Put into queues for NON or CON messages
 		if (messageType == Type.CON) {
-			if (!checkNSTART(exchange)) { // Check if NSTART is not reached yet
-											// for confirmable transmissions
-				return false;
-			}
-		} else if (getRemoteEndpoint(exchange).getNonConfirmableCounter() > MAX_SUCCESSIVE_NONS) {
-			// Every MAX_SUCCESSIVE_NONS + 1 packets, a non-confirmable needs to
-			// be converted to a confirmable [CoCoA]
-			if (exchange.getCurrentRequest().getDestinationPort() != 0) {
-				exchange.getCurrentRequest().setType(Type.CON);
-			} else if (exchange.getCurrentResponse() != null) {
-				exchange.getCurrentResponse().setType(Type.CON);
-			}
-			getRemoteEndpoint(exchange).resetNonConfirmableCounter();
-
 			// Check if NSTART is not reached yet for confirmable transmissions
 			if (!checkNSTART(exchange)) {
 				return false;
 			}
-		} else {
-			// Check of if there's space to queue a NON
-			if (getRemoteEndpoint(exchange).getNonConfirmableQueue().size() == EXCHANGELIMIT) {
-				// System.out.println("Non-confirmable exchange queue limit reached!");
-				// TODO: Drop packet -> Notify upper layers?
-			} else {
-				getRemoteEndpoint(exchange).getNonConfirmableQueue().add(
-						exchange);
-
-				// Check if NONs are already processed, if not, start bucket
-				// Thread
-				if (!getRemoteEndpoint(exchange).getProcessingNON()) {
-					executor.schedule(new bucketThread(
-							getRemoteEndpoint(exchange)), 0,
-							TimeUnit.MILLISECONDS);
+		//FIXME: It should only be about CONs and NONs, not ACKs or RSTs, right?
+		} else if (messageType == Type.NON) {
+			if (getRemoteEndpoint(exchange).getNonConfirmableCounter() > MAX_SUCCESSIVE_NONS) {
+				// Every MAX_SUCCESSIVE_NONS + 1 packets, a non-confirmable needs to be converted to a confirmable [CoCoA]
+				message.setType(Type.CON);
+				getRemoteEndpoint(exchange).resetNonConfirmableCounter();
+	
+				// Check if NSTART is not reached yet for confirmable transmissions
+				if (!checkNSTART(exchange)) {
+					return false;
 				}
+			} else {
+				// Check of if there's space to queue a NON
+				if (getRemoteEndpoint(exchange).getNonConfirmableQueue().size() == EXCHANGELIMIT) {
+					// System.out.println("Non-confirmable exchange queue limit reached!");
+					// TODO: Drop packet -> Notify upper layers?
+				} else {
+					//FIXME: The messages get passed along with the Exchange to deal with multi-threading
+					//       The queue should work similarly.
+					//       Best look at RetransmissionTask and do something similar.
+					getRemoteEndpoint(exchange).getNonConfirmableQueue().add(exchange);
+	
+					// Check if NONs are already processed, if not, start bucket Thread
+					if (!getRemoteEndpoint(exchange).getProcessingNON()) {
+						executor.schedule(new bucketThread(
+								getRemoteEndpoint(exchange)), 0,
+								TimeUnit.MILLISECONDS);
+					}
+				}
+				return false;
 			}
-			return false;
 		}
 		return true;
-
 	}
 	
 	/*
@@ -243,7 +234,7 @@ public abstract class CongestionControlLayer extends ReliabilityLayer {
 	 * @param endpoint      the Remote Endpoint for which the RTO update is done
 	 */
 	protected void initializeRTOEstimators(long measuredRTT, int estimatorType, RemoteEndpoint endpoint){		
-		long newRTO = config.getInt(NetworkConfigDefaults.ACK_TIMEOUT);
+		final long newRTO = config.getInt(NetworkConfigDefaults.ACK_TIMEOUT);
 
 		endpoint.updateRTO(newRTO);
 	}
