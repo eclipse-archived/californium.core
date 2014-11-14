@@ -59,7 +59,7 @@ public class RemoteEndpointManager {
 			RemoteEndpoint unusedRemoteEndpoint = new RemoteEndpoint(remotePort, remoteAddress, config);
 			remoteEndpointsList.put(remoteAddress,unusedRemoteEndpoint);
 			
-			//System.out.println("Number of RemoteEndpoint objects stored:" + remoteEndpointsList.size());
+			System.out.println("Number of RemoteEndpoint objects stored:" + remoteEndpointsList.size());
 		}
 		
 		return remoteEndpointsList.get(remoteAddress);

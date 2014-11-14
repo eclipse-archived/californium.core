@@ -304,7 +304,7 @@ public class RemoteEndpoint {
 			//System.out.println("Remote Enpdoint: WEAK");
 			exchangeInfoMap.get(exchange).setTypeWeakEstimator();
 		}else{
-			//If more than 1 retransmission was applied to the exchange, mark this entry as not updatable
+			//If more than 2 retransmissions were applied to the exchange, mark this entry as not updatable
 			//System.out.println("Remote Enpdoint: NO");
 			exchangeInfoMap.get(exchange).setTypeNoEstimator();
 		}
