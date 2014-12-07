@@ -27,10 +27,12 @@ import org.eclipse.californium.core.coap.Request;
 import org.eclipse.californium.core.coap.Response;
 import org.eclipse.californium.core.network.Exchange;
 import org.eclipse.californium.core.network.RemoteEndpoint;
+import org.eclipse.californium.core.network.RemoteEndpoint.bucketElement;
 import org.eclipse.californium.core.network.RemoteEndpointManager;
 import org.eclipse.californium.core.network.config.NetworkConfig;
 import org.eclipse.californium.core.network.config.NetworkConfigDefaults;
 import org.eclipse.californium.core.network.stack.congestioncontrol.*;
+import org.hamcrest.core.IsInstanceOf;
 
 /**
  * The optional Congestion Control (CC) Layer for the Californium CoAP
@@ -56,8 +58,7 @@ public abstract class CongestionControlLayer extends ReliabilityLayer {
 
 	// Maximum duration of a transaction, after that, sweep the exchanges
 	private final static long MAX_REMOTE_TRANSACTION_DURATION = 255 * 1000;
-	// Amount of non-confirmables that can be transmitted before a NON is
-	// converted to a CON (to get an RTT measurement); this is a CoCoA feature
+	// Amount of non-confirmables that can be transmitted before a NON is converted to a CON (to get an RTT measurement); this is a CoCoA feature
 	private final static int MAX_SUCCESSIVE_NONS = 7;
 
 	protected final static int OVERALLRTOTYPE = 0;
@@ -69,7 +70,7 @@ public abstract class CongestionControlLayer extends ReliabilityLayer {
 	// (separate queues)
 	private final static int EXCHANGELIMIT = 50;
 	private final static int MAX_RTO = 60000;
-
+	
 	// In CoAP, dithering is applied to the initial RTO of a transmission; set
 	// to true to apply dithering
 	private boolean appliesDithering;
@@ -100,18 +101,6 @@ public abstract class CongestionControlLayer extends ReliabilityLayer {
 	public void setDithering(boolean mode) {
 		this.appliesDithering = mode;
 	}
-
-	/*
-	 * Calculate how long the maximum transmission duration will be when no ACK
-	 * is received
-	 */
-	// FIXME What was this good for? Result unused in prepareRetransmission().
-	// private int calculateMaxTransactionDuration(Exchange exchange){
-	// return
-	// (int)(config.getInt(NetworkConfigDefaults.ACK_TIMEOUT_SCALE)*getRemoteEndpoint(exchange).getRTO()*
-	// Math.pow(getRemoteEndpoint(exchange).getExchangeVBF(exchange), 5));
-	// }
-
 	/*
 	 * Method called when receiving a Response/Request from the upper layers:
 	 * 1.) Checks if message is a non-confirmable. If so, it is added to the
@@ -134,13 +123,11 @@ public abstract class CongestionControlLayer extends ReliabilityLayer {
 
 		} else if (messageType == Type.NON) {
 			if (getRemoteEndpoint(exchange).getNonConfirmableCounter() > MAX_SUCCESSIVE_NONS) {
-				// Every MAX_SUCCESSIVE_NONS + 1 packets, a non-confirmable
-				// needs to be converted to a confirmable [CoCoA]
+				// Every MAX_SUCCESSIVE_NONS + 1 packets, a non-confirmable needs to be converted to a confirmable [CoCoA]
 				message.setType(Type.CON);
 				getRemoteEndpoint(exchange).resetNonConfirmableCounter();
 
-				// Check if NSTART is not reached yet for confirmable
-				// transmissions
+				// Check if NSTART is not reached yet for confirmable transmissions
 				if (!checkNSTART(exchange)) {
 					return false;
 				}
@@ -150,19 +137,10 @@ public abstract class CongestionControlLayer extends ReliabilityLayer {
 					// System.out.println("Non-confirmable exchange queue limit reached!");
 					// TODO: Drop packet -> Notify upper layers?
 				} else {
-					// FIXME: The messages get passed along with the Exchange to
-					// deal with multi-threading
-					// The queue should work similarly.
-					// Best look at RetransmissionTask and do something similar.
-					getRemoteEndpoint(exchange).getNonConfirmableQueue().add(
-							exchange);
-
-					// Check if NONs are already processed, if not, start bucket
-					// Thread
+					getRemoteEndpoint(exchange).registerBucketElement(exchange, message);
+					// Check if NONs are already processed, if not, start bucket Thread
 					if (!getRemoteEndpoint(exchange).getProcessingNON()) {
-						executor.schedule(new bucketThread(
-								getRemoteEndpoint(exchange)), 0,
-								TimeUnit.MILLISECONDS);
+						executor.schedule(new bucketThread(getRemoteEndpoint(exchange)), 0, TimeUnit.MILLISECONDS);
 					}
 				}
 				return false;
@@ -177,30 +155,24 @@ public abstract class CongestionControlLayer extends ReliabilityLayer {
 	 */
 	private boolean checkNSTART(Exchange exchange) {
 		getRemoteEndpoint(exchange).checkForDeletedExchanges();
-		if (getRemoteEndpoint(exchange).getNumberOfOngoingExchanges(exchange) < config
-				.getInt("NSTART")) {
+		if (getRemoteEndpoint(exchange).getNumberOfOngoingExchanges(exchange) < config.getInt("NSTART")) {
 			// System.out.println("Processing exchange (NSTART OK!)");
 
 			// NSTART allows to start the exchange, proceed normally
-			getRemoteEndpoint(exchange).registerExchange(exchange,
-					calculateVBF(getRemoteEndpoint(exchange).getRTO()));
+			getRemoteEndpoint(exchange).registerExchange(exchange, calculateVBF(getRemoteEndpoint(exchange).getRTO()));
 
 			// The exchange needs to be deleted after at least 255 s TODO:
 			// should this value be calculated dynamically ?
-			executor.schedule(new SweepCheckTask(getRemoteEndpoint(exchange),
-					exchange), MAX_REMOTE_TRANSACTION_DURATION,
-					TimeUnit.MILLISECONDS);
+			executor.schedule(new SweepCheckTask(getRemoteEndpoint(exchange), exchange), MAX_REMOTE_TRANSACTION_DURATION, TimeUnit.MILLISECONDS);
 			return true;
 		} else {
-			// NSTART does not allow any further parallel exchanges towards the
-			// remote endpoint
+			// NSTART does not allow any further parallel exchanges towards the remote endpoint
 			// System.out.println("Nstart does not allow further exchanges with "
 			// + getRemoteEndpoint(exchange).getRemoteAddress().toString());
 
 			// Check if the queue limit for exchanges is already reached
 			if (getRemoteEndpoint(exchange).getConfirmableQueue().size() == EXCHANGELIMIT) {
-				// Request cannot be queued TODO: does this trigger some
-				// feedback for other layers?
+				// Request cannot be queued TODO: does this trigger some feedback for other layers?
 				// System.out.println("Confirmable exchange queue limit reached! Message dropped...");
 
 			} else {
@@ -222,8 +194,7 @@ public abstract class CongestionControlLayer extends ReliabilityLayer {
 		if (timestamp != 0) {
 			measuredRTT = System.currentTimeMillis() - timestamp;
 			// process the RTT measurement
-			processRTTmeasurement(measuredRTT, exchange,
-					exchange.getFailedTransmissionCount());
+			processRTTmeasurement(measuredRTT, exchange, exchange.getFailedTransmissionCount());
 			getRemoteEndpoint(exchange).removeExchangeInfo(exchange);
 		}
 	}
@@ -240,8 +211,7 @@ public abstract class CongestionControlLayer extends ReliabilityLayer {
 	 *            the number of retransmissions that were applied to the
 	 *            transmission of the CON message
 	 */
-	protected void processRTTmeasurement(long measuredRTT, Exchange exchange,
-			int retransmissionCount) {
+	protected void processRTTmeasurement(long measuredRTT, Exchange exchange, int retransmissionCount) {
 		// Default CoAP does not use RTT info, so do nothing
 		return;
 	}
@@ -268,8 +238,7 @@ public abstract class CongestionControlLayer extends ReliabilityLayer {
 	 * @param endpoint
 	 *            the Remote Endpoint for which the RTO update is done
 	 */
-	protected void initializeRTOEstimators(long measuredRTT, int estimatorType,
-			RemoteEndpoint endpoint) {
+	protected void initializeRTOEstimators(long measuredRTT, int estimatorType, RemoteEndpoint endpoint) {
 		final long newRTO = config.getInt(NetworkConfigDefaults.ACK_TIMEOUT);
 
 		endpoint.updateRTO(newRTO);
@@ -288,8 +257,7 @@ public abstract class CongestionControlLayer extends ReliabilityLayer {
 	 * @param endpoint
 	 *            The Remote Endpoint for which the RTO update is done
 	 */
-	protected void updateEstimator(long measuredRTT, int estimatorType,
-			RemoteEndpoint endpoint) {
+	protected void updateEstimator(long measuredRTT, int estimatorType, RemoteEndpoint endpoint) {
 		// Default CoAP always uses the default timeout
 		long newRTO = config.getInt(NetworkConfigDefaults.ACK_TIMEOUT);
 		endpoint.updateRTO(newRTO);
@@ -313,14 +281,11 @@ public abstract class CongestionControlLayer extends ReliabilityLayer {
 	private void checkRemoteEndpointQueue(Exchange exchange) {
 		// 0 = empty queue | 1 = response | 2 = request
 		if (!getRemoteEndpoint(exchange).getConfirmableQueue().isEmpty()) {
-			// We have some exchanges that need to be processed; is it a
-			// response or a request?
-			Exchange queuedExchange = getRemoteEndpoint(exchange)
-					.getConfirmableQueue().poll();
+			// We have some exchanges that need to be processed; is it a response or a request?
+			Exchange queuedExchange = getRemoteEndpoint(exchange).getConfirmableQueue().poll();
 			if (queuedExchange.getCurrentResponse() != null) {
 				// it's a response
-				sendResponse(queuedExchange,
-						queuedExchange.getCurrentResponse());
+				sendResponse(queuedExchange, queuedExchange.getCurrentResponse());
 			} else if (queuedExchange.getCurrentRequest() != null) {
 				// it's a request
 				sendRequest(queuedExchange, queuedExchange.getCurrentRequest());
@@ -358,8 +323,7 @@ public abstract class CongestionControlLayer extends ReliabilityLayer {
 	 */
 	@Override
 	public void sendResponse(Exchange exchange, Response response) {
-		// Check if exchange is already running into a retransmission; if so,
-		// don't call processMessage, since this is a retransmission
+		// Check if exchange is already running into a retransmission; if so, don't call processMessage, since this is a retransmission
 		if (exchange.getFailedTransmissionCount() > 0) {
 			super.sendResponse(exchange, response);
 		} else if (processMessage(exchange, response)) {
@@ -374,42 +338,29 @@ public abstract class CongestionControlLayer extends ReliabilityLayer {
 	 * RTO.
 	 */
 	@Override
-	protected void prepareRetransmission(Exchange exchange,
-			RetransmissionTask task) {
+	protected void prepareRetransmission(Exchange exchange, RetransmissionTask task) {
 		int timeout;
-		// System.out.println("TXCount: " +
-		// exchange.getFailedTransmissionCount());
+		// System.out.println("TXCount: " + exchange.getFailedTransmissionCount());
 		if (exchange.getFailedTransmissionCount() == 0) {
 			timeout = (int) getRemoteEndpoint(exchange).getRTO();
 			if (appliesDithering()) {
-				// TODO: Workaround to force CoCoA (-Strong) not to use the same
-				// RTO after backing off several times
-				// System.out.println("Applying dithering, matching RTO");
+				// RTO algorithms with dithering don't reuse backed-off RTO values, reset the RTO to the estimated value
 				getRemoteEndpoint(exchange).matchCurrentRTO();
 				timeout = (int) getRemoteEndpoint(exchange).getRTO();
-				// Apply dithering by randomly choosing RTO from [RTO, RTO *
-				// 1.5]
-				float ack_random_factor = config
-						.getFloat(NetworkConfigDefaults.ACK_RANDOM_FACTOR);
-				timeout = getRandomTimeout(timeout,
-						(int) (timeout * ack_random_factor));
+				// Apply dithering by randomly choosing RTO from [RTO, RTO * 1.5]
+				float ack_random_factor = config.getFloat(NetworkConfigDefaults.ACK_RANDOM_FACTOR);
+				timeout = getRandomTimeout(timeout, (int) (timeout * ack_random_factor));
 			}
 			// System.out.println("meanrto:" + timeout + ";" +
 			// System.currentTimeMillis());
 		} else {
-			int tempTimeout = (int) (getRemoteEndpoint(exchange)
-					.getExchangeVBF(exchange) * exchange.getCurrentTimeout());
+			int tempTimeout = (int) (getRemoteEndpoint(exchange).getExchangeVBF(exchange) * exchange.getCurrentTimeout());
 			timeout = (tempTimeout < MAX_RTO) ? tempTimeout : MAX_RTO;
 			getRemoteEndpoint(exchange).setCurrentRTO(timeout);
 			// System.out.println("RTX");
 		}
 		exchange.setCurrentTimeout(timeout);
-		// expectedmaxduration = calculateMaxTransactionDuration(exchange);
-		// //FIXME what was this for?
-		// System.out.println("Sending MSG (timeout;timestamp:" + timeout + ";"
-		// + System.currentTimeMillis() + ")");
-		ScheduledFuture<?> f = executor.schedule(task, timeout,
-				TimeUnit.MILLISECONDS);
+		ScheduledFuture<?> f = executor.schedule(task, timeout, TimeUnit.MILLISECONDS);
 		exchange.setRetransmissionHandle(f);
 	}
 
@@ -456,12 +407,12 @@ public abstract class CongestionControlLayer extends ReliabilityLayer {
 	 * This Thread is used to apply rate control to non-confirmables by polling
 	 * them from the queue and scheduling the task to run again later.
 	 */
-	private class bucketThread implements Runnable {
+	private  class bucketThread implements Runnable {
 
 		RemoteEndpoint endpoint;
 
-		public bucketThread(RemoteEndpoint queue) {
-			endpoint = queue;
+		public bucketThread(RemoteEndpoint endpoint) {
+			this.endpoint = endpoint;
 		}
 
 		@Override
@@ -469,32 +420,27 @@ public abstract class CongestionControlLayer extends ReliabilityLayer {
 			if (!endpoint.getNonConfirmableQueue().isEmpty()) {
 				endpoint.setProcessingNON(true);
 
-				Exchange exchange = endpoint.getNonConfirmableQueue().poll();
-
-				if (getRemoteEndpoint(exchange).getNonConfirmableCounter() <= MAX_SUCCESSIVE_NONS) {
-					getRemoteEndpoint(exchange).increaseNonConfirmableCounter();
-					// FIXME: Is there a "nice" way to determine whether it is a
-					// request or response?
-					if (exchange.getCurrentRequest().getDestinationPort() != 0) {
-						// it's a response
-						sendBucketRequest(exchange,
-								exchange.getCurrentRequest());
-					} else if (exchange.getCurrentResponse() != null) {
+				bucketElement bucketElement = endpoint.getBucketElement();//.getExchange();
+				
+				
+				if (endpoint.getNonConfirmableCounter() <= MAX_SUCCESSIVE_NONS) {
+					endpoint.increaseNonConfirmableCounter();
+					// FIXME: Is there a cheaper way to determine whether it is a Request/Response?
+					if (bucketElement.getMessage() instanceof Request){
 						// it's a request
-						sendBucketResponse(exchange,
-								exchange.getCurrentResponse());
+						sendBucketRequest(bucketElement.getExchange(), (Request) bucketElement.getMessage());
+					} else {
+						// it's a response
+						sendBucketResponse(bucketElement.getExchange(), (Response) bucketElement.getMessage());
 					}
+					
 				}
-				// schedule next transmission of a NON based on the RTO value
-				// (rate = 1/RTO)
-				executor.schedule(
-						new bucketThread(getRemoteEndpoint(exchange)),
-						getRemoteEndpoint(exchange).getRTO(),
-						TimeUnit.MILLISECONDS);
+				// schedule next transmission of a NON based on the RTO value (rate = 1/RTO)
+				executor.schedule(new bucketThread(endpoint), endpoint.getRTO(), TimeUnit.MILLISECONDS);
 
 			} else {
 				endpoint.setProcessingNON(false);
-			}
+			}			
 		}
 	}
 
@@ -524,8 +470,7 @@ public abstract class CongestionControlLayer extends ReliabilityLayer {
 	}
 
 	public static CongestionControlLayer newImplementation(NetworkConfig config) {
-		final String implementation = config
-				.getString(NetworkConfigDefaults.CONGESTION_CONTROL_ALGORITHM);
+		final String implementation = config.getString(NetworkConfigDefaults.CONGESTION_CONTROL_ALGORITHM);
 		if ("Cocoa".equals(implementation))
 			return new Cocoa(config);
 		else if ("CocoaStrong".equals(implementation))
@@ -537,8 +482,7 @@ public abstract class CongestionControlLayer extends ReliabilityLayer {
 		else if ("PeakhopperRto".equals(implementation))
 			return new PeakhopperRto(config);
 		else {
-			LOGGER.config("Unknown CONGESTION_CONTROL_ALGORITHM ("
-					+ implementation + "), using Cocoa");
+			LOGGER.config("Unknown CONGESTION_CONTROL_ALGORITHM (" + implementation + "), using Cocoa");
 			return new Cocoa(config);
 		}
 	}

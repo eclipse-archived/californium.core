@@ -22,6 +22,7 @@ import java.util.LinkedList;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.eclipse.californium.core.coap.Message;
 import org.eclipse.californium.core.network.config.NetworkConfig;
 import org.eclipse.californium.core.network.config.NetworkConfigDefaults;
 
@@ -33,6 +34,9 @@ public class RemoteEndpoint {
 	private int Port;
 	// A concurrent Hash Map that contains timestamp information for the exchanges
 	private ConcurrentHashMap<Exchange, exchangeInfo> exchangeInfoMap;
+	
+	// A concurrent Hash Map that contains timestamp information for the exchanges
+	private ConcurrentHashMap<Exchange, Message> bucketQueue;
 	
 	//Overall RTO, Strong RTO, Strong RTT, Strong RTTVAR, to be used to set the retransmission timeout.
 	private long[] overallRTO;
@@ -86,7 +90,7 @@ public class RemoteEndpoint {
 	private Queue<Exchange> confirmableQueue; 
 	
 	/* A queue for non-confirmable exchanges that need to be rate-controlled */
-	private Queue<Exchange> nonConfirmableQueue; 
+	private Queue<bucketElement> nonConfirmableQueue; 
 	
 	public RemoteEndpoint(int remotePort, InetAddress remoteAddress, NetworkConfig config){
 		Address = remoteAddress;
@@ -122,7 +126,7 @@ public class RemoteEndpoint {
 		exchangeInfoMap = new ConcurrentHashMap<Exchange, exchangeInfo>();
 
 		confirmableQueue = new LinkedList<Exchange>();
-	    nonConfirmableQueue = new LinkedList<Exchange>();
+	    nonConfirmableQueue = new LinkedList<bucketElement>();
 	}
 
 	public int getRemotePort(){
@@ -195,7 +199,7 @@ public class RemoteEndpoint {
 		return confirmableQueue;
 	}
 	
-	public Queue<Exchange> getNonConfirmableQueue(){
+	public Queue<bucketElement> getNonConfirmableQueue(){
 		return nonConfirmableQueue;
 	}
 	
@@ -316,8 +320,8 @@ public class RemoteEndpoint {
 	 * @param vbf the variable back-off factor
 	 */
 	public void registerExchange(Exchange exchange, double vbf){
-		exchangeInfo newExchange = new exchangeInfo(System.currentTimeMillis(), vbf);
-		exchangeInfoMap.put(exchange, newExchange);
+		exchangeInfo newExchangeInfo = new exchangeInfo(System.currentTimeMillis(), vbf);
+		exchangeInfoMap.put(exchange, newExchangeInfo);
 	}
 	
 	/**
@@ -414,6 +418,7 @@ public class RemoteEndpoint {
 	    System.out.println("Delta: " + delta + " D: " + D_value + " B: " + B_value + " RTT_max: " + RTT_max);
 	}
 	
+	
 	/**
 	 * Object that stores exchange related information 
 	 * 1.) Timestamp
@@ -449,6 +454,32 @@ public class RemoteEndpoint {
 		
 		public double getVBF(){
 			return vbf;
+		}
+	}
+	
+	public void registerBucketElement(Exchange exchange, Message message){
+		nonConfirmableQueue.add(new bucketElement(exchange, message));
+	}
+	
+	public bucketElement getBucketElement(){
+		return nonConfirmableQueue.poll();
+	}
+	
+	public class bucketElement{
+		private Exchange exchange;
+		private Message message;
+		
+		public bucketElement(Exchange exchange, Message message){
+			this.exchange = exchange;
+			this.message = message;
+		}
+		
+		public Exchange getExchange(){
+			return this.exchange;
+		}
+		
+		public Message getMessage(){
+			return this.message;
 		}
 	}
 }
