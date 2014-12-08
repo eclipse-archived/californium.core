@@ -33,7 +33,7 @@ public class RemoteEndpoint {
 	// The port number of the remote endpoint
 	private int Port;
 	// A concurrent Hash Map that contains timestamp information for the exchanges
-	private ConcurrentHashMap<Exchange, exchangeInfo> exchangeInfoMap;
+	private ConcurrentHashMap<Exchange, ExchangeInfo> exchangeInfoMap;
 	
 	// A concurrent Hash Map that contains timestamp information for the exchanges
 	private ConcurrentHashMap<Exchange, Message> bucketQueue;
@@ -90,7 +90,7 @@ public class RemoteEndpoint {
 	private Queue<Exchange> confirmableQueue; 
 	
 	/* A queue for non-confirmable exchanges that need to be rate-controlled */
-	private Queue<bucketElement> nonConfirmableQueue; 
+	private Queue<BucketElement> nonConfirmableQueue; 
 	
 	public RemoteEndpoint(int remotePort, InetAddress remoteAddress, NetworkConfig config){
 		Address = remoteAddress;
@@ -123,10 +123,10 @@ public class RemoteEndpoint {
 		
 		processingNON = false;
 		
-		exchangeInfoMap = new ConcurrentHashMap<Exchange, exchangeInfo>();
+		exchangeInfoMap = new ConcurrentHashMap<Exchange, ExchangeInfo>();
 
 		confirmableQueue = new LinkedList<Exchange>();
-	    nonConfirmableQueue = new LinkedList<bucketElement>();
+	    nonConfirmableQueue = new LinkedList<BucketElement>();
 	}
 
 	public int getRemotePort(){
@@ -199,7 +199,7 @@ public class RemoteEndpoint {
 		return confirmableQueue;
 	}
 	
-	public Queue<bucketElement> getNonConfirmableQueue(){
+	public Queue<BucketElement> getNonConfirmableQueue(){
 		return nonConfirmableQueue;
 	}
 	
@@ -320,7 +320,7 @@ public class RemoteEndpoint {
 	 * @param vbf the variable back-off factor
 	 */
 	public void registerExchange(Exchange exchange, double vbf){
-		exchangeInfo newExchangeInfo = new exchangeInfo(System.currentTimeMillis(), vbf);
+		ExchangeInfo newExchangeInfo = new ExchangeInfo(System.currentTimeMillis(), vbf);
 		exchangeInfoMap.put(exchange, newExchangeInfo);
 	}
 	
@@ -425,13 +425,13 @@ public class RemoteEndpoint {
 	 * 2.) Variable Backoff Factor
 	 * 3.) Estimator Type (weak/strong/none)
 	 */ 
-	private class exchangeInfo{
+	private class ExchangeInfo{
 		
 		private long timestamp;
 		private double vbf;
 		private int estimatorType;
 		
-		public exchangeInfo(long timestamp, double vbf){
+		public ExchangeInfo(long timestamp, double vbf){
 			this.timestamp = timestamp;
 			this.vbf = vbf;
 			estimatorType = STRONGRTOTYPE;
@@ -458,18 +458,18 @@ public class RemoteEndpoint {
 	}
 	
 	public void registerBucketElement(Exchange exchange, Message message){
-		nonConfirmableQueue.add(new bucketElement(exchange, message));
+		nonConfirmableQueue.add(new BucketElement(exchange, message));
 	}
 	
-	public bucketElement getBucketElement(){
+	public BucketElement getBucketElement(){
 		return nonConfirmableQueue.poll();
 	}
 	
-	public class bucketElement{
+	public class BucketElement{
 		private Exchange exchange;
 		private Message message;
 		
-		public bucketElement(Exchange exchange, Message message){
+		public BucketElement(Exchange exchange, Message message){
 			this.exchange = exchange;
 			this.message = message;
 		}

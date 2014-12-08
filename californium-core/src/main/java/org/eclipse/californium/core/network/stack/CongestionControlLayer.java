@@ -27,7 +27,7 @@ import org.eclipse.californium.core.coap.Request;
 import org.eclipse.californium.core.coap.Response;
 import org.eclipse.californium.core.network.Exchange;
 import org.eclipse.californium.core.network.RemoteEndpoint;
-import org.eclipse.californium.core.network.RemoteEndpoint.bucketElement;
+import org.eclipse.californium.core.network.RemoteEndpoint.BucketElement;
 import org.eclipse.californium.core.network.RemoteEndpointManager;
 import org.eclipse.californium.core.network.config.NetworkConfig;
 import org.eclipse.californium.core.network.config.NetworkConfigDefaults;
@@ -420,7 +420,7 @@ public abstract class CongestionControlLayer extends ReliabilityLayer {
 			if (!endpoint.getNonConfirmableQueue().isEmpty()) {
 				endpoint.setProcessingNON(true);
 
-				bucketElement bucketElement = endpoint.getBucketElement();//.getExchange();
+				BucketElement bucketElement = endpoint.getBucketElement();//.getExchange();
 				
 				
 				if (endpoint.getNonConfirmableCounter() <= MAX_SUCCESSIVE_NONS) {
