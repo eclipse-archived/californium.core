@@ -60,6 +60,7 @@ import org.apache.http.message.BasicRequestLine;
 import org.apache.http.message.BasicStatusLine;
 import org.apache.http.util.EntityUtils;
 import org.eclipse.californium.core.coap.CoAP.Code;
+import org.eclipse.californium.core.coap.CoAP.Type;
 import org.eclipse.californium.core.coap.CoAP.ResponseCode;
 import org.eclipse.californium.core.coap.MediaTypeRegistry;
 import org.eclipse.californium.core.coap.Message;
@@ -415,7 +416,7 @@ public final class HttpTranslator {
 
 		// create the request
 //		Request coapRequest = Request.getRequestForMethod(coapMethod);
-		Request coapRequest = new Request(Code.valueOf(coapMethod));
+		Request coapRequest = new Request(Code.valueOf(coapMethod), Type.CON);
 
 		// get the uri
 		String uriString = httpRequest.getRequestLine().getUri();
