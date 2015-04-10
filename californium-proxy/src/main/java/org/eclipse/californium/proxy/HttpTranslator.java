@@ -452,7 +452,7 @@ public final class HttpTranslator {
 
 			if (proxyingEnabled) {
 				// if the uri hasn't the indication of the scheme, add it
-				if (!uriString.matches("^coap://.*")) {
+				if (!uriString.matches("^coap://.*") && !uriString.matches("^coaps://.*")) {
 					uriString = "coap://" + uriString;
 				}
 
