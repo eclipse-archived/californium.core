@@ -675,7 +675,7 @@ public final class HttpTranslator {
 				// parsed is different, or is not iso encoded, it is needed a
 				// translation
 				Charset isoCharset = ISO_8859_1;
-				if (!charset.equals(isoCharset) && contentType != ContentType.APPLICATION_JSON) {
+				if (!charset.equals(isoCharset) && !contentType.getMimeType().equals(ContentType.APPLICATION_JSON.getMimeType())) {
 					byte[] newPayload = changeCharset(payload, charset, isoCharset);
 
 					// since ISO-8859-1 is a subset of UTF-8, it is needed to
