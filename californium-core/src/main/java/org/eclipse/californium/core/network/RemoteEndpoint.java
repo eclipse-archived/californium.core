@@ -22,6 +22,7 @@ import java.util.LinkedList;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 
+import org.eclipse.californium.core.coap.Message;
 import org.eclipse.californium.core.network.config.NetworkConfig;
 import org.eclipse.californium.core.network.config.NetworkConfigDefaults;
 
@@ -32,7 +33,10 @@ public class RemoteEndpoint {
 	// The port number of the remote endpoint
 	private int Port;
 	// A concurrent Hash Map that contains timestamp information for the exchanges
-	private ConcurrentHashMap<Exchange, exchangeInfo> exchangeInfoMap;
+	private ConcurrentHashMap<Exchange, ExchangeInfo> exchangeInfoMap;
+	
+	// A concurrent Hash Map that contains timestamp information for the exchanges
+	private ConcurrentHashMap<Exchange, Message> bucketQueue;
 	
 	//Overall RTO, Strong RTO, Strong RTT, Strong RTTVAR, to be used to set the retransmission timeout.
 	private long[] overallRTO;
@@ -86,7 +90,7 @@ public class RemoteEndpoint {
 	private Queue<Exchange> confirmableQueue; 
 	
 	/* A queue for non-confirmable exchanges that need to be rate-controlled */
-	private Queue<Exchange> nonConfirmableQueue; 
+	private Queue<BucketElement> nonConfirmableQueue; 
 	
 	public RemoteEndpoint(int remotePort, InetAddress remoteAddress, NetworkConfig config){
 		Address = remoteAddress;
@@ -119,10 +123,10 @@ public class RemoteEndpoint {
 		
 		processingNON = false;
 		
-		exchangeInfoMap = new ConcurrentHashMap<Exchange, exchangeInfo>();
+		exchangeInfoMap = new ConcurrentHashMap<Exchange, ExchangeInfo>();
 
 		confirmableQueue = new LinkedList<Exchange>();
-	    nonConfirmableQueue = new LinkedList<Exchange>();
+	    nonConfirmableQueue = new LinkedList<BucketElement>();
 	}
 
 	public int getRemotePort(){
@@ -195,7 +199,7 @@ public class RemoteEndpoint {
 		return confirmableQueue;
 	}
 	
-	public Queue<Exchange> getNonConfirmableQueue(){
+	public Queue<BucketElement> getNonConfirmableQueue(){
 		return nonConfirmableQueue;
 	}
 	
@@ -304,7 +308,7 @@ public class RemoteEndpoint {
 			//System.out.println("Remote Enpdoint: WEAK");
 			exchangeInfoMap.get(exchange).setTypeWeakEstimator();
 		}else{
-			//If more than 1 retransmission was applied to the exchange, mark this entry as not updatable
+			//If more than 2 retransmissions were applied to the exchange, mark this entry as not updatable
 			//System.out.println("Remote Enpdoint: NO");
 			exchangeInfoMap.get(exchange).setTypeNoEstimator();
 		}
@@ -316,8 +320,8 @@ public class RemoteEndpoint {
 	 * @param vbf the variable back-off factor
 	 */
 	public void registerExchange(Exchange exchange, double vbf){
-		exchangeInfo newExchange = new exchangeInfo(System.currentTimeMillis(), vbf);
-		exchangeInfoMap.put(exchange, newExchange);
+		ExchangeInfo newExchangeInfo = new ExchangeInfo(System.currentTimeMillis(), vbf);
+		exchangeInfoMap.put(exchange, newExchangeInfo);
 	}
 	
 	/**
@@ -414,19 +418,20 @@ public class RemoteEndpoint {
 	    System.out.println("Delta: " + delta + " D: " + D_value + " B: " + B_value + " RTT_max: " + RTT_max);
 	}
 	
+	
 	/**
 	 * Object that stores exchange related information 
 	 * 1.) Timestamp
 	 * 2.) Variable Backoff Factor
 	 * 3.) Estimator Type (weak/strong/none)
 	 */ 
-	private class exchangeInfo{
+	private class ExchangeInfo{
 		
 		private long timestamp;
 		private double vbf;
 		private int estimatorType;
 		
-		public exchangeInfo(long timestamp, double vbf){
+		public ExchangeInfo(long timestamp, double vbf){
 			this.timestamp = timestamp;
 			this.vbf = vbf;
 			estimatorType = STRONGRTOTYPE;
@@ -449,6 +454,32 @@ public class RemoteEndpoint {
 		
 		public double getVBF(){
 			return vbf;
+		}
+	}
+	
+	public void registerBucketElement(Exchange exchange, Message message){
+		nonConfirmableQueue.add(new BucketElement(exchange, message));
+	}
+	
+	public BucketElement getBucketElement(){
+		return nonConfirmableQueue.poll();
+	}
+	
+	public class BucketElement{
+		private Exchange exchange;
+		private Message message;
+		
+		public BucketElement(Exchange exchange, Message message){
+			this.exchange = exchange;
+			this.message = message;
+		}
+		
+		public Exchange getExchange(){
+			return this.exchange;
+		}
+		
+		public Message getMessage(){
+			return this.message;
 		}
 	}
 }
