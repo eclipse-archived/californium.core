@@ -159,8 +159,10 @@ public class Exchange {
 		assert(origin == Origin.REMOTE);
 		if (request.getType() == Type.CON && !request.isAcknowledged()) {
 			request.setAcknowledged(true);
-			EmptyMessage ack = EmptyMessage.newACK(request);
-			endpoint.sendEmptyMessage(this, ack);
+			if (endpoint != null) {
+				EmptyMessage ack = EmptyMessage.newACK(request);
+				endpoint.sendEmptyMessage(this, ack);
+			}
 		}
 	}
 	
@@ -171,8 +173,10 @@ public class Exchange {
 	public void sendReject() {
 		assert(origin == Origin.REMOTE);
 		request.setRejected(true);
-		EmptyMessage rst = EmptyMessage.newRST(request);
-		endpoint.sendEmptyMessage(this, rst);
+		if (endpoint != null) {
+			EmptyMessage rst = EmptyMessage.newRST(request);
+			endpoint.sendEmptyMessage(this, rst);
+		}
 	}
 	
 	/**
@@ -185,7 +189,8 @@ public class Exchange {
 		response.setDestination(request.getSource());
 		response.setDestinationPort(request.getSourcePort());
 		setResponse(response);
-		endpoint.sendResponse(this, response);
+		if (endpoint != null)
+			endpoint.sendResponse(this, response);
 	}
 	
 	public Origin getOrigin() {
