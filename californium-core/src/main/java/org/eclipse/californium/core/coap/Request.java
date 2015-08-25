@@ -22,6 +22,8 @@
  *    												  from toString() to
  *                                                    Message.getPayloadTracingString(). 
  *                                                    (for message tracing)
+ *    Achim Kraus (Bosch Software Innovations GmbH) - use destination in getURI, if
+ *                                                    host is not available
  ******************************************************************************/
 package org.eclipse.californium.core.coap;
 
@@ -285,7 +287,13 @@ public class Request extends Message {
 		else builder.append("coap://");
 		String host = getOptions().getUriHost();
 		if (host != null) builder.append(host);
-		else builder.append("localhost");
+		else {
+			InetAddress dest = getDestination();
+			if (null == dest || dest.isLoopbackAddress())
+				builder.append("localhost");
+			else 
+				builder.append(getDestination());
+		}
 		Integer port = getOptions().getUriPort();
 		if (port != null) builder.append(":").append(port);
 		String path = getOptions().getUriPathString();
