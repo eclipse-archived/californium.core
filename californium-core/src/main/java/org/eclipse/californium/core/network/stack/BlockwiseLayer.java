@@ -16,6 +16,7 @@
  *    Dominique Im Obersteg - parsers and initial implementation
  *    Daniel Pauli - parsers and initial implementation
  *    Kai Hudalla - logging
+ *    Achim Kraus (Bosch Software Innovations GmbH) - stop transfer on cancel
  ******************************************************************************/
 package org.eclipse.californium.core.network.stack;
 
@@ -330,35 +331,40 @@ public class BlockwiseLayer extends AbstractLayer {
 					// another token now?
 
 					Request request = exchange.getRequest();
-					int num = block2.getNum() + 1;
-					int szx = block2.getSzx();
-					boolean m = false;
-					Request block = new Request(request.getCode());
-					block.setToken(response.getToken());
-					block.setOptions(new OptionSet(request.getOptions()));
-					block.setDestination(request.getDestination());
-					block.setDestinationPort(request.getDestinationPort());
-					
-					block.setType(request.getType()); // NON could make sense over SMS or similar transports
-					block.getOptions().setBlock2(szx, m, num);
-					status.setCurrentNum(num);
-					
-					// to make it easier for Observe, we do not re-use the Token
-//					if (!response.getOptions().hasObserve()) {
-//						block.setToken(request.getToken());
-//					}
-					
-					// make sure not to use Observe for block retrieval
-					block.getOptions().removeObserve();
-					
-					exchange.setCurrentRequest(block);
-					super.sendRequest(exchange, block);
-					
+					if (request.isCanceled()) {
+						// response with the payload accumulated so far
+						exchange.setResponse(response);
+						LOGGER.fine("Canceled request, partitial assembled response: " + response);
+						super.receiveResponse(exchange, response);
+					} else {
+						int num = block2.getNum() + 1;
+						int szx = block2.getSzx();
+						boolean m = false;
+						Request block = new Request(request.getCode());
+						block.setToken(response.getToken());
+						block.setOptions(new OptionSet(request.getOptions()));
+						block.setDestination(request.getDestination());
+						block.setDestinationPort(request.getDestinationPort());
+						
+						block.setType(request.getType()); // NON could make sense over SMS or similar transports
+						block.getOptions().setBlock2(szx, m, num);
+						status.setCurrentNum(num);
+						
+						// to make it easier for Observe, we do not re-use the Token
+//						if (!response.getOptions().hasObserve()) {
+//							block.setToken(request.getToken());
+//						}
+						
+						// make sure not to use Observe for block retrieval
+						block.getOptions().removeObserve();
+						
+						exchange.setCurrentRequest(block);
+						super.sendRequest(exchange, block);
+					}					
 				} else {
 					LOGGER.finer("We have received all "+status.getBlockCount()+" blocks of the response. Assemble and deliver");
 					Response assembled = new Response(response.getCode());
 					assembleMessage(status, assembled, response);
-					assembled.setType(response.getType());
 					
 					// set overall transfer RTT
 					assembled.setRTT(System.currentTimeMillis() - exchange.getTimestamp());
