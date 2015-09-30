@@ -203,7 +203,32 @@ public class HttpStack {
 			LOGGER.warning("exchanger was null for request "+request+" with hash "+request.hashCode());
 		}
 	}
-
+	/**
+	 * The Class CoapResponseWorker. This thread request a response from the
+         * lower layers. It is the producer of the producer/consumer pattern.
+	 */
+ 	private final class CoapRequestWorker extends Thread {
+		private final Request coapRequest;
+                
+		/**
+		 * Instantiates a new coap response worker.
+		 * 
+		 * @param name
+		 *            the name
+		 * @param coapRequest
+		 *            the coap request
+		 */
+		public CoapRequestWorker(String name, Request coapRequest) {
+			super(name);
+			this.coapRequest = coapRequest;
+                }
+                
+ 		@Override
+		public void run() {                   
+                    doReceiveMessage(coapRequest);                    
+                }
+        }        
+        
 	/**
 	 * The Class CoapResponseWorker. This thread waits a response from the lower
 	 * layers. It is the consumer of the producer/consumer pattern.
@@ -212,6 +237,7 @@ public class HttpStack {
 		private final HttpAsyncExchange httpExchange;
 		private final HttpRequest httpRequest;
 		private final Request coapRequest;
+                private final Thread responseWorker;
 
 		/**
 		 * Instantiates a new coap response worker.
@@ -224,12 +250,15 @@ public class HttpStack {
 		 *            the http exchange
 		 * @param httpRequest
 		 *            the http request
+                 * @param responseWorker
+		 *            the coap response worker 
 		 */
-		public CoapResponseWorker(String name, Request coapRequest, HttpAsyncExchange httpExchange, HttpRequest httpRequest) {
+		public CoapResponseWorker(String name, Request coapRequest, HttpAsyncExchange httpExchange, HttpRequest httpRequest, Thread responseWorker) {
 			super(name);
 			this.coapRequest = coapRequest;
 			this.httpExchange = httpExchange;
 			this.httpRequest = httpRequest;
+                        this.responseWorker = responseWorker;
 		}
 
 		/*
@@ -238,7 +267,7 @@ public class HttpStack {
 		 */
 		@Override
 		public void run() {
-			// get the exchanger
+			// get the exchanger                    
 			Exchanger<Response> exchanger = exchangeMap.get(coapRequest);
 
 			// if the map does not contain the key, send an error response
@@ -255,7 +284,7 @@ public class HttpStack {
 			} catch (TimeoutException e) {
 				LOGGER.warning("Timeout occurred");
 				// send the timeout error message
-				sendSimpleHttpResponse(httpExchange, HttpTranslator.STATUS_TIMEOUT);
+				sendSimpleHttpResponse(httpExchange, HttpTranslator.STATUS_TIMEOUT);                            
 				return;
 			} catch (InterruptedException e) {
 				// if the thread is interrupted, terminate
@@ -267,8 +296,10 @@ public class HttpStack {
 			} finally {
 				// remove the entry from the map
 				exchangeMap.remove(coapRequest);
+                                // the producer thread was unable to deliver a response at time, so we kill it.        
+                                responseWorker.interrupt();                                
 //				if (Bench_Help.DO_LOG) 
-					LOGGER.finer("Entry removed from map");
+					LOGGER.finer("Entry removed from map");       
 			}
 
 			if (coapResponse == null) {
@@ -438,18 +469,19 @@ public class HttpStack {
 //					if (Bench_Help.DO_LOG) 
 						LOGGER.finer("Fill exchange with: " + coapRequest+" with hash="+coapRequest.hashCode());
 
-					// the new thread will wait for the completion of
-					// the coap request
-					Thread worker = new CoapResponseWorker("HttpStack Worker", coapRequest, httpExchange, httpRequest);
+					// We create two threads
+                                        // The responseWorker will be in charge of producing a CoapResponse (producer)
+                                        // The requestWorker will be in charge of using this response to return it to the client
+                                        Thread requestWorker = new CoapRequestWorker("HttpStart Worker: consummer", coapRequest);                                                
+                                        Thread responseWorker = new CoapResponseWorker("HttpStack Worker: producer", coapRequest, httpExchange, httpRequest, requestWorker);
 
-					// starting the "consumer thread" that will sleep waiting
-					// for the producer
-					worker.start();
+					// starting the producer and consummer thread
+					requestWorker.start();
+					responseWorker.start();                                                    
+                                        
 //					if (Bench_Help.DO_LOG) 
 						LOGGER.finer("Started thread 'httpStack worker' to wait the response");
-
-					// send the coap request to the upper layers
-					doReceiveMessage(coapRequest);
+                                                                
 				} catch (InvalidMethodException e) {
 					LOGGER.warning("Method not implemented" + e.getMessage());
 					sendSimpleHttpResponse(httpExchange, HttpTranslator.STATUS_WRONG_METHOD);
@@ -461,12 +493,12 @@ public class HttpStack {
 				} catch (TranslationException e) {
 					LOGGER.warning("Failed to translate the http request in a valid coap request: " + e.getMessage());
 					sendSimpleHttpResponse(httpExchange, HttpTranslator.STATUS_TRANSLATION_ERROR);
-					return;
+					return;                                        
 				} catch (RuntimeException e) {
 					LOGGER.warning("Exception in translation: "+e);
 					e.printStackTrace();
-					throw e;
-				}
+					throw e;                                        
+                                }
 			}
 
 			/*
