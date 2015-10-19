@@ -391,7 +391,7 @@ public class CoAPEndpoint implements Endpoint {
 				try {
 					coapstack.sendRequest(request);
 				} catch (Throwable t) {
-					t.printStackTrace();
+					LOGGER.log(Level.SEVERE, t.getMessage(), t);
 				}
 			}
 		});
@@ -409,7 +409,7 @@ public class CoAPEndpoint implements Endpoint {
 					try {
 						coapstack.sendResponse(exchange, response);
 					} catch (Exception e) {
-						e.printStackTrace();
+					    LOGGER.log(Level.SEVERE, e.getMessage(), e);
 					}
 				}
 			});
