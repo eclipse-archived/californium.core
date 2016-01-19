@@ -33,28 +33,13 @@ import java.util.regex.Pattern;
 public class MediaTypeRegistry {
 
 	// Constants ///////////////////////////////////////////////////////////////
+	// IANA registry at http://www.iana.org/assignments/core-parameters/core-parameters.xhtml#content-formats
 	public static final int TEXT_PLAIN = 0;
-	public static final int TEXT_XML = 1;
-	public static final int TEXT_CSV = 2;
-	public static final int TEXT_HTML = 3;
-	public static final int IMAGE_GIF = 21; // 03
-	public static final int IMAGE_JPEG = 22; // 03
-	public static final int IMAGE_PNG = 23; // 03
-	public static final int IMAGE_TIFF = 24; // 03
-	public static final int AUDIO_RAW = 25; // 03
-	public static final int VIDEO_RAW = 26; // 03
 	public static final int APPLICATION_LINK_FORMAT = 40;
 	public static final int APPLICATION_XML = 41;
 	public static final int APPLICATION_OCTET_STREAM = 42;
-	public static final int APPLICATION_RDF_XML = 43;
-	public static final int APPLICATION_SOAP_XML = 44;
-	public static final int APPLICATION_ATOM_XML = 45;
-	public static final int APPLICATION_XMPP_XML = 46;
 	public static final int APPLICATION_EXI = 47;
-	public static final int APPLICATION_FASTINFOSET = 48; // 04
-	public static final int APPLICATION_SOAP_FASTINFOSET = 49; // 04
-	public static final int APPLICATION_JSON = 50; // 04
-	public static final int APPLICATION_X_OBIX_BINARY = 51; // 04
+	public static final int APPLICATION_JSON = 50;
 	public static final int APPLICATION_CBOR = 60;
 
 	// implementation specific
@@ -66,27 +51,12 @@ public class MediaTypeRegistry {
 		add(UNDEFINED, "unknown", "???");
 
 		add(TEXT_PLAIN, "text/plain", "txt");
-		// add(TEXT_XML, "text/xml", "xml"); // obsolete, use application/xml
-		add(TEXT_CSV, "text/csv", "csv");
-		add(TEXT_HTML, "text/html", "html");
-
-		add(IMAGE_GIF, "image/gif", "gif");
-		add(IMAGE_JPEG, "image/jpeg", "jpg");
-		add(IMAGE_PNG, "image/png", "png");
-		add(IMAGE_TIFF, "image/tiff", "tif");
 
 		add(APPLICATION_LINK_FORMAT, "application/link-format", "wlnk");
 		add(APPLICATION_XML, "application/xml", "xml");
 		add(APPLICATION_OCTET_STREAM, "application/octet-stream", "bin");
-		add(APPLICATION_RDF_XML, "application/rdf+xml", "rdf");
-		add(APPLICATION_SOAP_XML, "application/soap+xml", "soap");
-		add(APPLICATION_ATOM_XML, "application/atom+xml", "atom");
-		add(APPLICATION_XMPP_XML, "application/xmpp+xml", "xmpp");
 		add(APPLICATION_EXI, "application/exi", "exi");
-		add(APPLICATION_FASTINFOSET, "application/fastinfoset", "finf");
-		add(APPLICATION_SOAP_FASTINFOSET, "application/soap+fastinfoset", "soap.finf");
 		add(APPLICATION_JSON, "application/json", "json");
-		add(APPLICATION_X_OBIX_BINARY, "application/x-obix-binary", "obix");
 		add(APPLICATION_CBOR, "application/cbor", "cbor"); // RFC 7049
 	}
 
@@ -99,31 +69,15 @@ public class MediaTypeRegistry {
 	public static boolean isPrintable(int mediaType) {
 		switch (mediaType) {
 		case TEXT_PLAIN:
-		case TEXT_XML:
-		case TEXT_CSV:
-		case TEXT_HTML:
 		case APPLICATION_LINK_FORMAT:
 		case APPLICATION_XML:
-		case APPLICATION_RDF_XML:
-		case APPLICATION_SOAP_XML:
-		case APPLICATION_ATOM_XML:
-		case APPLICATION_XMPP_XML:
 		case APPLICATION_JSON:
 
 		case UNDEFINED:
 			return true;
 
-		case IMAGE_GIF:
-		case IMAGE_JPEG:
-		case IMAGE_PNG:
-		case IMAGE_TIFF:
-		case AUDIO_RAW:
-		case VIDEO_RAW:
 		case APPLICATION_OCTET_STREAM:
 		case APPLICATION_EXI:
-		case APPLICATION_FASTINFOSET:
-		case APPLICATION_SOAP_FASTINFOSET:
-		case APPLICATION_X_OBIX_BINARY:
 		case APPLICATION_CBOR:
 		default:
 			return false;
