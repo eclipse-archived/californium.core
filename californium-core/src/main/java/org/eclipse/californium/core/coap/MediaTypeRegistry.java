@@ -46,18 +46,18 @@ public class MediaTypeRegistry {
 	public static final int UNDEFINED = -1;
 
 	// initializer
-	private static final HashMap<Integer, String[]> registry = new HashMap<Integer, String[]>();
+	private static final HashMap<Integer, MediaType> registry = new HashMap<>();
 	static {
-		add(UNDEFINED, "unknown", "???");
+		add(new MediaType(UNDEFINED, "unknown", "???", true));
 
-		add(TEXT_PLAIN, "text/plain", "txt");
+		add(new MediaType(TEXT_PLAIN, "text/plain", "txt", true));
 
-		add(APPLICATION_LINK_FORMAT, "application/link-format", "wlnk");
-		add(APPLICATION_XML, "application/xml", "xml");
-		add(APPLICATION_OCTET_STREAM, "application/octet-stream", "bin");
-		add(APPLICATION_EXI, "application/exi", "exi");
-		add(APPLICATION_JSON, "application/json", "json");
-		add(APPLICATION_CBOR, "application/cbor", "cbor"); // RFC 7049
+		add(new MediaType(APPLICATION_LINK_FORMAT, "application/link-format", "wlnk", true));
+		add(new MediaType(APPLICATION_XML, "application/xml", "xml", true));
+		add(new MediaType(APPLICATION_OCTET_STREAM, "application/octet-stream", "bin", false));
+		add(new MediaType(APPLICATION_EXI, "application/exi", "exi", false));
+		add(new MediaType(APPLICATION_JSON, "application/json", "json", true));
+		add(new MediaType(APPLICATION_CBOR, "application/cbor", "cbor", false)); // RFC 7049
 	}
 
 	// Static Functions ////////////////////////////////////////////////////////
@@ -67,20 +67,12 @@ public class MediaTypeRegistry {
 	}
 
 	public static boolean isPrintable(int mediaType) {
-		switch (mediaType) {
-		case TEXT_PLAIN:
-		case APPLICATION_LINK_FORMAT:
-		case APPLICATION_XML:
-		case APPLICATION_JSON:
+		MediaType type = registry.get(mediaType);
 
-		case UNDEFINED:
+		if (type != null) {
+			return type.printable;
+		} else {
 			return true;
-
-		case APPLICATION_OCTET_STREAM:
-		case APPLICATION_EXI:
-		case APPLICATION_CBOR:
-		default:
-			return false;
 		}
 	}
 
@@ -90,7 +82,7 @@ public class MediaTypeRegistry {
 		}
 
 		for (Integer key : registry.keySet()) {
-			if (registry.get(key)[0].equalsIgnoreCase(type)) {
+			if (registry.get(key).type.equalsIgnoreCase(type)) {
 				return key;
 			}
 		}
@@ -109,7 +101,7 @@ public class MediaTypeRegistry {
 		List<Integer> matches = new LinkedList<Integer>();
 
 		for (Integer mediaType : registry.keySet()) {
-			String mime = registry.get(mediaType)[0];
+			String mime = registry.get(mediaType).type;
 			if (pattern.matcher(mime).matches()) {
 				matches.add(mediaType);
 			}
@@ -119,26 +111,70 @@ public class MediaTypeRegistry {
 	}
 
 	public static String toFileExtension(int mediaType) {
-		String texts[] = registry.get(mediaType);
+		MediaType type = registry.get(mediaType);
 
-		if (texts != null) {
-			return texts[1];
+		if (type != null) {
+			return type.fileExtension;
 		} else {
 			return "unknown_" + mediaType;
 		}
 	}
 
 	public static String toString(int mediaType) {
-		String texts[] = registry.get(mediaType);
+		MediaType type = registry.get(mediaType);
 
-		if (texts != null) {
-			return texts[0];
+		if (type != null) {
+			return type.type;
 		} else {
 			return "unknown/" + mediaType;
 		}
 	}
 
-	private static void add(int mediaType, String string, String extension) {
-		registry.put(mediaType, new String[] { string, extension });
+	public static void add(MediaType m) {
+		registry.put(m.code, m);
+	}
+
+	public static class MediaType {
+		// IANA-assigned CoAP content format ID
+		public final int code;
+
+		// IANA-assigned media type string
+		public final String type;
+
+		// file extension
+		public final String fileExtension;
+
+		// true if format is human-readable
+		public final boolean printable;
+
+		public MediaType(int code, String type, String fileExtension, boolean printable) {
+			this.code = code;
+			this.type = type;
+			this.fileExtension = fileExtension;
+			this.printable = printable;
+		}
+
+		@Override
+		public boolean equals(Object o) {
+			if (this == o) return true;
+			if (o == null || getClass() != o.getClass()) return false;
+
+			MediaType mediaType = (MediaType) o;
+
+			if (code != mediaType.code) return false;
+			if (printable != mediaType.printable) return false;
+			if (!type.equals(mediaType.type)) return false;
+			return fileExtension.equals(mediaType.fileExtension);
+
+		}
+
+		@Override
+		public int hashCode() {
+			int result = code;
+			result = 31 * result + type.hashCode();
+			result = 31 * result + fileExtension.hashCode();
+			result = 31 * result + (printable ? 1 : 0);
+			return result;
+		}
 	}
 }
