@@ -134,6 +134,10 @@ public class MediaTypeRegistry {
 		registry.put(m.code, m);
 	}
 
+	public static MediaType get(int code) {
+		return registry.get(code);
+	}
+
 	public static class MediaType {
 		// IANA-assigned CoAP content format ID
 		public final int code;
