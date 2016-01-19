@@ -144,6 +144,11 @@ public class MediaTypeRegistry {
 		return UNDEFINED;
 	}
 
+	/**
+	 * find all media types with a specifier matching a shell-style glob
+	 * @param regex a shell-style glob that contains exactly one '*', ex: "application/*"
+	 * @return an array of the matching media types
+	 */
 	public static Integer[] parseWildcard(String regex) {
 		regex = regex.trim().substring(0, regex.indexOf('*')).trim().concat(".*");
 		Pattern pattern = Pattern.compile(regex);
