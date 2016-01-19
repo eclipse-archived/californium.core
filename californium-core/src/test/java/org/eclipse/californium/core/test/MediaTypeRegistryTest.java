@@ -90,4 +90,16 @@ public class MediaTypeRegistryTest {
 		assertEquals("application/json", MediaTypeRegistry.toString(MediaTypeRegistry.APPLICATION_JSON));
 		assertEquals("application/cbor", MediaTypeRegistry.toString(MediaTypeRegistry.APPLICATION_CBOR));
 	}
+
+	@Test
+	public void testAddAndGet() throws Exception {
+		// test using the obsolete-draft PNG spec
+		MediaTypeRegistry.MediaType png = new MediaTypeRegistry.MediaType(23, "image/png", "png", false);
+
+		assertEquals(null, MediaTypeRegistry.get(png.code));
+
+		MediaTypeRegistry.add(png);
+
+		assertEquals(png, MediaTypeRegistry.get(png.code));
+	}
 }
